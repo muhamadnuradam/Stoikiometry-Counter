@@ -1123,27 +1123,15 @@ with left:
 
     with st.container(border=True):
         st.markdown(f"**Mass of {mat_a}**", unsafe_allow_html=True)
-        st.latex(
-            rf"""
-            m_A = \frac{{{r["massa_u1"]:.2f}}}{{{{r["wt_a1"]:.2f}}/100}} = {r["massa_a"]:.2f}\ \text{{g}}
-            """
-        )
+        st.markdown(f"{r['massa_a']:.2f} g")
 
     with st.container(border=True):
         st.markdown(f"**{unsur_2} from {mat_a}**", unsafe_allow_html=True)
-        st.latex(
-            rf"""
-            m_{{{unsur_2},A}} = {r["wt_a2"]:.2f}\% \times {r["massa_a"]:.2f} = {r["u2_dari_a"]:.2f}\ \text{{g}}
-            """
-        )
+        st.markdown(f"{r['u2_dari_a']:.2f} g")
 
     with st.container(border=True):
         st.markdown(f"**{unsur_2} Deficit**", unsafe_allow_html=True)
-        st.latex(
-            rf"""
-            \Delta m = {r["massa_u2"]:.2f} - {r["u2_dari_a"]:.2f} = {r["defisit_u2"]:.2f}\ \text{{g}}
-            """
-        )
+        st.markdown(f"{r['defisit_u2']:.2f} g")
 
 
 # =========================================================
