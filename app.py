@@ -97,7 +97,7 @@ body,
     ===================================================== */
 
 [data-testid="stHeader"] {
-    background: #FFFFFF !important;
+    display: none !important;
 }
 
 
