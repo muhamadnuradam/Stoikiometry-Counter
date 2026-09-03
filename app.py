@@ -16,6 +16,99 @@ st.set_page_config(
 
 
 # =========================================================
+# PERIODIC TABLE DATA (Ar Values)
+# =========================================================
+
+ELEMENTS_DATA = {
+    "H": {"name": "Hydrogen", "ar": 1.008},
+    "He": {"name": "Helium", "ar": 4.0026},
+    "Li": {"name": "Lithium", "ar": 6.94},
+    "Be": {"name": "Beryllium", "ar": 9.0122},
+    "B": {"name": "Boron", "ar": 10.81},
+    "C": {"name": "Carbon", "ar": 12.011},
+    "N": {"name": "Nitrogen", "ar": 14.007},
+    "O": {"name": "Oxygen", "ar": 15.999},
+    "F": {"name": "Fluorine", "ar": 18.998},
+    "Ne": {"name": "Neon", "ar": 20.180},
+    "Na": {"name": "Sodium", "ar": 22.990},
+    "Mg": {"name": "Magnesium", "ar": 24.305},
+    "Al": {"name": "Aluminium", "ar": 26.982},
+    "Si": {"name": "Silicon", "ar": 28.085},
+    "P": {"name": "Phosphorus", "ar": 30.974},
+    "S": {"name": "Sulfur", "ar": 32.06},
+    "Cl": {"name": "Chlorine", "ar": 35.45},
+    "Ar": {"name": "Argon", "ar": 39.948},
+    "K": {"name": "Potassium", "ar": 39.098},
+    "Ca": {"name": "Calcium", "ar": 40.078},
+    "Sc": {"name": "Scandium", "ar": 44.956},
+    "Ti": {"name": "Titanium", "ar": 47.867},
+    "V": {"name": "Vanadium", "ar": 50.942},
+    "Cr": {"name": "Chromium", "ar": 51.996},
+    "Mn": {"name": "Manganese", "ar": 54.938},
+    "Fe": {"name": "Iron", "ar": 55.845},
+    "Co": {"name": "Cobalt", "ar": 58.933},
+    "Ni": {"name": "Nickel", "ar": 58.693},
+    "Cu": {"name": "Copper", "ar": 63.546},
+    "Zn": {"name": "Zinc", "ar": 65.38},
+    "Ga": {"name": "Gallium", "ar": 69.723},
+    "Ge": {"name": "Germanium", "ar": 72.630},
+    "As": {"name": "Arsenic", "ar": 74.922},
+    "Se": {"name": "Selenium", "ar": 78.971},
+    "Br": {"name": "Bromine", "ar": 79.904},
+    "Kr": {"name": "Krypton", "ar": 83.798},
+    "Rb": {"name": "Rubidium", "ar": 85.468},
+    "Sr": {"name": "Strontium", "ar": 87.62},
+    "Y": {"name": "Yttrium", "ar": 88.906},
+    "Zr": {"name": "Zirconium", "ar": 91.224},
+    "Nb": {"name": "Niobium", "ar": 92.906},
+    "Mo": {"name": "Molybdenum", "ar": 95.95},
+    "Ru": {"name": "Ruthenium", "ar": 101.07},
+    "Rh": {"name": "Rhodium", "ar": 102.91},
+    "Pd": {"name": "Palladium", "ar": 106.42},
+    "Ag": {"name": "Silver", "ar": 107.87},
+    "Cd": {"name": "Cadmium", "ar": 112.41},
+    "In": {"name": "Indium", "ar": 114.82},
+    "Sn": {"name": "Tin", "ar": 118.71},
+    "Sb": {"name": "Antimony", "ar": 121.76},
+    "Te": {"name": "Tellurium", "ar": 127.60},
+    "I": {"name": "Iodine", "ar": 126.90},
+    "Xe": {"name": "Xenon", "ar": 131.29},
+    "Cs": {"name": "Caesium", "ar": 132.91},
+    "Ba": {"name": "Barium", "ar": 137.33},
+    "La": {"name": "Lanthanum", "ar": 138.91},
+    "Ce": {"name": "Cerium", "ar": 140.12},
+    "Pr": {"name": "Praseodymium", "ar": 140.91},
+    "Nd": {"name": "Neodymium", "ar": 144.24},
+    "Sm": {"name": "Samarium", "ar": 150.36},
+    "Eu": {"name": "Europium", "ar": 151.96},
+    "Gd": {"name": "Gadolinium", "ar": 157.25},
+    "Tb": {"name": "Terbium", "ar": 158.93},
+    "Dy": {"name": "Dysprosium", "ar": 162.50},
+    "Ho": {"name": "Holmium", "ar": 164.93},
+    "Er": {"name": "Erbium", "ar": 167.26},
+    "Tm": {"name": "Thulium", "ar": 168.93},
+    "Yb": {"name": "Ytterbium", "ar": 173.05},
+    "Lu": {"name": "Lutetium", "ar": 174.97},
+    "Hf": {"name": "Hafnium", "ar": 178.49},
+    "Ta": {"name": "Tantalum", "ar": 180.95},
+    "W": {"name": "Tungsten", "ar": 183.84},
+    "Re": {"name": "Rhenium", "ar": 186.21},
+    "Os": {"name": "Osmium", "ar": 190.23},
+    "Ir": {"name": "Iridium", "ar": 192.22},
+    "Pt": {"name": "Platinum", "ar": 195.08},
+    "Au": {"name": "Gold", "ar": 196.97},
+    "Hg": {"name": "Mercury", "ar": 200.59},
+    "Tl": {"name": "Thallium", "ar": 204.38},
+    "Pb": {"name": "Lead", "ar": 207.2},
+    "Bi": {"name": "Bismuth", "ar": 208.98},
+    "Th": {"name": "Thorium", "ar": 232.04},
+    "U": {"name": "Uranium", "ar": 238.03}
+}
+
+ELEMENT_OPTIONS = [f"{sym} - {data['name']}" for sym, data in ELEMENTS_DATA.items()]
+
+
+# =========================================================
 # CSS
 # =========================================================
 
@@ -156,6 +249,25 @@ body,
     border-radius: 6px !important;
 
     font-size: 13px !important;
+}
+
+
+/* sidebar selectbox styling */
+
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+
+    background: #102E50 !important;
+
+    border: 1px solid #2B4D70 !important;
+
+    color: #FFFFFF !important;
+
+    border-radius: 6px !important;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] * {
+
+    color: #FFFFFF !important;
 }
 
 
@@ -707,38 +819,46 @@ st.sidebar.markdown(
 
 
 # ---------------------------------------------------------
-# ELEMENTS
+# ELEMENTS SELECTION
 # ---------------------------------------------------------
 
 st.sidebar.markdown("**ELEMENTS**")
 
 col1, col2 = st.sidebar.columns(2)
 
-unsur_1 = col1.text_input(
-    "Symbol",
-    value="Sm"
+selected_elem1 = col1.selectbox(
+    "Element 1",
+    options=ELEMENT_OPTIONS,
+    index=ELEMENT_OPTIONS.index("Sm - Samarium")
 )
 
-ar_1 = col2.number_input(
+unsur_1 = selected_elem1.split(" - ")[0]
+ar_1 = ELEMENTS_DATA[unsur_1]["ar"]
+
+col2.number_input(
     "Ar",
-    value=150.36,
-    min_value=0.01,
-    step=0.01
+    value=ar_1,
+    disabled=True,
+    key="ar1_display"
 )
 
 
 col1, col2 = st.sidebar.columns(2)
 
-unsur_2 = col1.text_input(
-    "Symbol",
-    value="Co"
+selected_elem2 = col1.selectbox(
+    "Element 2",
+    options=ELEMENT_OPTIONS,
+    index=ELEMENT_OPTIONS.index("Co - Cobalt")
 )
 
-ar_2 = col2.number_input(
+unsur_2 = selected_elem2.split(" - ")[0]
+ar_2 = ELEMENTS_DATA[unsur_2]["ar"]
+
+col2.number_input(
     "Ar",
-    value=58.93,
-    min_value=0.01,
-    step=0.01
+    value=ar_2,
+    disabled=True,
+    key="ar2_display"
 )
 
 
@@ -822,7 +942,7 @@ if not unsur_1 or not unsur_2:
 
 
 if unsur_1 == unsur_2:
-    st.error("Symbols must be different.")
+    st.error("Elements must be different.")
     st.stop()
 
 
