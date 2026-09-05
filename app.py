@@ -1,22 +1,44 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import re
+import textwrap
+from collections import OrderedDict
 
+# Tambahkan baris ini
+from compounds import COMPOUND_LIBRARY
+
+# =========================================================
+# SAFE HTML RENDERER
+# =========================================================
+# ... (sisa kode tetap sama)
+
+# =========================================================
+# SAFE HTML RENDERER
+# =========================================================
+# Menghapus spasi awal di setiap baris agar HTML tidak 
+# terdeteksi sebagai code block oleh Streamlit Markdown
+def render_html(markup, **kwargs):
+    cleaned_markup = "\n".join(line.strip() for line in markup.split('\n'))
+    st.markdown(cleaned_markup, **kwargs)
+
+def render_sidebar(markup, **kwargs):
+    cleaned_markup = "\n".join(line.strip() for line in markup.split('\n'))
+    st.sidebar.markdown(cleaned_markup, **kwargs)
 
 # =========================================================
 # CONFIG
 # =========================================================
 
 st.set_page_config(
-    page_title="Mass Balance",
+    page_title="Alloy Calculator",
     page_icon="⚗",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-
 # =========================================================
-# PERIODIC TABLE DATA (Ar Values)
+# PERIODIC TABLE DATA
 # =========================================================
 
 ELEMENTS_DATA = {
@@ -105,568 +127,143 @@ ELEMENTS_DATA = {
     "U": {"name": "Uranium", "ar": 238.03}
 }
 
-ELEMENT_OPTIONS = [f"{sym} - {data['name']}" for sym, data in ELEMENTS_DATA.items()]
-
-
+#
 # =========================================================
 # CSS
 # =========================================================
 
-st.markdown("""
+render_html(
+    """
 <style>
 
-@font-face {
-    font-family: "Helvetica";
-    src: local("Helvetica"),
-         local("Helvetica Neue"),
-         local("Arial");
-}
-
-
-/* =====================================================
-    GLOBAL
-    ===================================================== */
-
-html,
-body,
-.stApp,
-.stApp *,
+html, body, .stApp,
 [data-testid="stAppViewContainer"],
-[data-testid="stAppViewContainer"] *,
-[data-testid="stMain"],
-[data-testid="stMain"] * {
-
-    font-family:
-        "Helvetica",
-        "Helvetica Neue",
-        Arial,
-        sans-serif !important;
-}
-
-
-/* =====================================================
-    COLORS
-    ===================================================== */
-
-:root {
-
-    --navy: #071A33;
-    --blue: #0B3A6E;
-    --blue-light: #EAF2FA;
-
-    --black: #111111;
-    --gray: #667085;
-    --line: #D9E0E8;
-
-    --white: #FFFFFF;
-}
-
-
-/* =====================================================
-    APP
-    ===================================================== */
-
-.stApp {
-    background: #FFFFFF !important;
-    color: var(--black) !important;
-}
-
-
-/* =====================================================
-    MAIN CONTENT
-    ===================================================== */
-
-[data-testid="stAppViewContainer"] {
-    background: #FFFFFF !important;
-}
-
 [data-testid="stMain"] {
-    background: #FFFFFF !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    background-color: #0B0F19 !important;
+    color: #F3F4F6 !important;
 }
-
-
-/* =====================================================
-    HEADER
-    ===================================================== */
 
 [data-testid="stHeader"] {
     display: none !important;
 }
 
-
-/* =====================================================
-    SIDEBAR
-    ===================================================== */
-
 [data-testid="stSidebar"] {
-
-    background:
-        linear-gradient(
-            180deg,
-            #071A33 0%,
-            #0A2342 100%
-        ) !important;
-
+    background: linear-gradient(
+        180deg,
+        #071A33 0%,
+        #0A2342 100%
+    ) !important;
     border-right: 1px solid #102E50 !important;
 }
 
-
 [data-testid="stSidebar"] * {
-
     color: #FFFFFF !important;
-
-    font-family:
-        "Helvetica",
-        "Helvetica Neue",
-        Arial,
-        sans-serif !important;
 }
-
-
-/* sidebar title */
-
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
-
-    color: #FFFFFF !important;
-    font-weight: 600 !important;
-}
-
-
-/* sidebar input */
 
 [data-testid="stSidebar"] input {
-
     background: #102E50 !important;
-
     color: #FFFFFF !important;
-
-    border:
-        1px solid
-        #2B4D70 !important;
-
-    border-radius: 6px !important;
-
-    font-size: 13px !important;
-}
-
-
-/* sidebar selectbox styling */
-
-[data-testid="stSidebar"] [data-baseweb="select"] > div {
-
-    background: #102E50 !important;
-
     border: 1px solid #2B4D70 !important;
-
-    color: #FFFFFF !important;
-
-    border-radius: 6px !important;
+    border-radius: 7px !important;
 }
-
-[data-testid="stSidebar"] [data-baseweb="select"] * {
-
-    color: #FFFFFF !important;
-}
-
-
-/* sidebar number */
-
-[data-testid="stSidebar"] [data-baseweb="input"] {
-
-    background: #102E50 !important;
-}
-
-
-/* sidebar labels */
 
 [data-testid="stSidebar"] label {
-
     color: #D9E5F2 !important;
-
     font-size: 12px !important;
-
-    font-weight: 400 !important;
 }
 
-
 .main-title {
-    font-family:
-        "Helvetica",
-        "Helvetica Neue",
-        Arial,
-        sans-serif !important;
-
-    font-size: 27px !important;
-    line-height: 1.3 !important;
-
-    font-weight: 600 !important;
-
-    letter-spacing: -0.5px;
-
-    color: #071A33 !important;
-
-    margin-top: 0 !important;
-    margin-bottom: 3px !important;
-
-    padding-top: 2px !important;
-
-    overflow: visible !important;
+    font-size: 27px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 3px;
 }
 
 .subtitle {
-
     font-size: 13px;
-
-    color: #667085;
-
+    color: #9CA3AF;
     margin-bottom: 20px;
 }
 
-
-/* =====================================================
-    SECTION TITLE
-    ===================================================== */
-
 .section-title {
-
     font-size: 16px;
-
     font-weight: 600;
-
-    color: #071A33;
-
-    margin-top: 5px;
-
+    color: white;
+    margin-top: 8px;
     margin-bottom: 10px;
 }
 
-
-/* =====================================================
-    CARD
-    ===================================================== */
-
 .card {
-
-    background: #FFFFFF;
-
-    border:
-        1px solid
-        #D9E0E8;
-
+    background: #111827;
+    border: 1px solid #1F2937;
     border-radius: 9px;
-
     padding: 17px 19px;
-
     margin-bottom: 13px;
 }
-
 
 .card-blue {
-
-    background: #EAF2FA;
-
-    border:
-        1px solid
-        #C9DBED;
-
+    background: #0F233D;
+    border: 1px solid #1D3B66;
     border-radius: 9px;
-
     padding: 17px 19px;
-
     margin-bottom: 13px;
 }
 
+.card-warning {
+    background: #2A2110;
+    border: 1px solid #705B24;
+    border-radius: 9px;
+    padding: 17px 19px;
+    margin-bottom: 13px;
+}
 
-/* =====================================================
-    SMALL LABEL
-    ===================================================== */
+.card-success {
+    background: #10251B;
+    border: 1px solid #245B3B;
+    border-radius: 9px;
+    padding: 17px 19px;
+    margin-bottom: 13px;
+}
 
 .small-label {
-
     font-size: 11px;
-
-    color: #667085;
-
+    color: #9CA3AF;
     letter-spacing: 0.3px;
-
     text-transform: uppercase;
-
-    margin-bottom: 4px;
+    margin-bottom: 5px;
 }
-
-
-/* =====================================================
-    RESULT NUMBER
-    ===================================================== */
 
 .result-number {
-
     font-size: 21px;
-
-    line-height: 1.1;
-
     font-weight: 600;
-
-    color: #071A33;
+    color: #FFFFFF;
+    margin-bottom: 5px;
 }
-
-
-/* =====================================================
-    NORMAL NUMBER
-    ===================================================== */
-
-.number {
-
-    font-size: 13px;
-
-    color: #111111;
-
-    font-weight: 500;
-}
-
-
-/* =====================================================
-    BODY
-    ===================================================== */
 
 .body-text {
-
     font-size: 13px;
-
-    line-height: 1.55;
-
-    color: #303846;
+    color: #D1D5DB;
+    margin-top: 3px;
 }
-
-
-/* =====================================================
-    FORMULA
-    ===================================================== */
-
-.formula-box {
-
-    background: #F5F8FB;
-
-    border-left:
-        3px solid
-        #0B3A6E;
-
-    padding: 9px 13px;
-
-    margin: 9px 0;
-
-    border-radius: 3px;
-}
-
-
-/* =====================================================
-    SUCCESS
-    ===================================================== */
-
-.final-box {
-
-    background: #071A33;
-
-    color: white;
-
-    border-radius: 9px;
-
-    padding: 17px 19px;
-
-    margin-top: 10px;
-}
-
-
-.final-title {
-
-    font-size: 12px;
-
-    color: #AFC9E5;
-
-    text-transform: uppercase;
-
-    letter-spacing: 0.5px;
-
-    margin-bottom: 7px;
-}
-
-
-.final-main {
-
-    font-size: 15px;
-
-    color: white;
-
-    line-height: 1.5;
-}
-
-
-/* =====================================================
-    METRIC
-    ===================================================== */
 
 [data-testid="stMetric"] {
-
-    background: #FFFFFF;
-
-    border:
-        1px solid
-        #D9E0E8;
-
+    background: #111827 !important;
+    border: 1px solid #1F2937 !important;
     border-radius: 8px;
-
     padding: 11px 14px;
 }
 
-
 [data-testid="stMetricLabel"] {
-
     font-size: 10px !important;
-
-    color: #667085 !important;
-
-    font-weight: 400 !important;
+    color: #9CA3AF !important;
 }
-
 
 [data-testid="stMetricValue"] {
-
     font-size: 20px !important;
-
-    color: #071A33 !important;
-
+    color: #FFFFFF !important;
     font-weight: 600 !important;
 }
-
-
-[data-testid="stMetricDelta"] {
-
-    font-size: 10px !important;
-}
-
-
-/* =====================================================
-    INPUT
-    ===================================================== */
-
-.stTextInput input,
-.stNumberInput input {
-
-    font-family:
-        "Helvetica",
-        "Helvetica Neue",
-        Arial,
-        sans-serif !important;
-
-    font-size: 13px !important;
-
-    color: #111111 !important;
-
-    background: #F4F6F8 !important;
-
-    border:
-        1px solid
-        #D9E0E8 !important;
-
-    border-radius: 6px !important;
-}
-
-
-/* =====================================================
-    BUTTON
-    ===================================================== */
-
-button,
-button * {
-
-    font-family:
-        "Helvetica",
-        "Helvetica Neue",
-        Arial,
-        sans-serif !important;
-}
-
-
-/* =====================================================
-    DATAFRAME
-    ===================================================== */
-
-[data-testid="stDataFrame"] {
-
-    border-radius: 7px;
-
-    overflow: hidden;
-}
-
-
-/* =====================================================
-    CAPTION
-    ===================================================== */
-
-[data-testid="stCaptionContainer"] {
-
-    color: #667085 !important;
-
-    font-size: 11px !important;
-}
-
-
-/* =====================================================
-    DIVIDER
-    ===================================================== */
-
-hr {
-
-    border: none !important;
-
-    border-top:
-        1px solid
-        #E2E7ED !important;
-
-    margin:
-        14px 0 !important;
-}
-
-
-/* =====================================================
-    REMOVE EXTRA SPACE
-    ===================================================== */
-
-.block-container {
-
-    padding-top: 28px !important;
-
-    padding-bottom: 25px !important;
-
-    max-width: 1450px !important;
-}
-
-
-/* =====================================================
-    LATEX
-    ===================================================== */
-
-.katex {
-
-    font-size: 0.90em !important;
-}
-
-
-/* =====================================================
-    ALERT
-    ===================================================== */
-
-[data-testid="stAlert"] {
-
-    border-radius: 8px !important;
-
-    font-size: 13px !important;
-}
-/* =====================================================
-    NUMBER INPUT - TOMBOL PLUS MINUS HITAM
-    ===================================================== */
 
 .stNumberInput button {
     color: #000000 !important;
@@ -674,129 +271,223 @@ hr {
     border: none !important;
 }
 
-.stNumberInput button:hover {
-    color: #000000 !important;
-    background-color: #E5E7EB !important;
+hr {
+    border-top: 1px solid #1F2937 !important;
 }
 
-.stNumberInput button svg {
-    color: #000000 !important;
-    stroke: #000000 !important;
-}
-
-.stNumberInput button svg path {
-    stroke: #000000 !important;
-}
 </style>
-""", unsafe_allow_html=True)
-
+"""
+, unsafe_allow_html=True
+)
 
 # =========================================================
-# FUNCTIONS
+# FORMULA PARSER
 # =========================================================
 
-def format_formula(u1, q1, u2, q2):
-    f1 = u1 if q1 == 1 else f"{u1}<sub>{q1}</sub>"
-    f2 = u2 if q2 == 1 else f"{u2}<sub>{q2}</sub>"
-    return f"{f1}{f2}"
+def parse_formula(formula):
+    formula = formula.strip()
+    if not formula:
+        return None
 
-def format_formula_plain(u1, q1, u2, q2):
-    f1 = u1 if q1 == 1 else f"{u1}{q1}"
-    f2 = u2 if q2 == 1 else f"{u2}{q2}"
-    return f"{f1}{f2}"
+    tokens = re.findall(r"[A-Z][a-z]?|\d+|\(|\)", formula)
+    if not tokens:
+        return None
+
+    if "".join(tokens) != formula:
+        return None
+
+    stack = [OrderedDict()]
+    i = 0
+
+    while i < len(tokens):
+        token = tokens[i]
+
+        # Opening parenthesis
+        if token == "(":
+            stack.append(OrderedDict())
+
+        # Closing parenthesis
+        elif token == ")":
+            if len(stack) <= 1:
+                return None
+            
+            group = stack.pop()
+            multiplier = 1
+
+            if i + 1 < len(tokens) and tokens[i + 1].isdigit():
+                multiplier = int(tokens[i + 1])
+                i += 1
+
+            if multiplier <= 0:
+                return None
+
+            for element, amount in group.items():
+                stack[-1][element] = stack[-1].get(element, 0) + amount * multiplier
+
+        # Number without element
+        elif token.isdigit():
+            return None
+
+        # Element
+        else:
+            if token not in ELEMENTS_DATA:
+                return None
+            
+            amount = 1
+            if i + 1 < len(tokens) and tokens[i + 1].isdigit():
+                amount = int(tokens[i + 1])
+                i += 1
+
+                if amount <= 0:
+                    return None
+
+            stack[-1][token] = stack[-1].get(token, 0) + amount
+
+        i += 1
+
+    if len(stack) != 1:
+        return None
+
+    return dict(stack[0])
+
+# =========================================================
+# FORMULA FORMATTERS
+# =========================================================
+
+def format_formula_html(counts):
+    parts = []
+    for element, qty in counts.items():
+        qty = float(qty)
+        if abs(qty - 1) < 1e-12:
+            parts.append(element)
+        else:
+            q = str(int(qty)) if qty.is_integer() else f"{qty:g}"
+            parts.append(f"{element}<sub>{q}</sub>")
+    return "".join(parts)
 
 
-def calculate_mass_balance(
-    ar1,
-    ar2,
-    a_qty_1,
-    a_qty_2,
-    b_qty_1,
-    b_qty_2,
-    target_mass
-):
-    mr_a = (
-        a_qty_1 * ar1
-        +
-        a_qty_2 * ar2
-    )
+def format_formula_plain(counts):
+    parts = []
+    for element, qty in counts.items():
+        qty = float(qty)
+        if abs(qty - 1) < 1e-12:
+            parts.append(element)
+        else:
+            q = str(int(qty)) if qty.is_integer() else f"{qty:g}"
+            parts.append(f"{element}{q}")
+    return "".join(parts)
 
-    mr_b = (
-        b_qty_1 * ar1
-        +
-        b_qty_2 * ar2
-    )
+# =========================================================
+# CALCULATE MR
+# =========================================================
 
-    wt_a1 = (
-        a_qty_1 * ar1 / mr_a
-    ) * 100
+def calculate_mr(parsed):
+    return sum(amount * ELEMENTS_DATA[element]["ar"] for element, amount in parsed.items())
 
-    wt_a2 = (
-        a_qty_2 * ar2 / mr_a
-    ) * 100
+# =========================================================
+# LIBRARY RECOMMENDATION
+# =========================================================
 
-    wt_b1 = (
-        b_qty_1 * ar1 / mr_b
-    ) * 100
+def recommend_compounds(target_elements):
+    recommendations = []
+    target_set = set(target_elements)
 
-    wt_b2 = (
-        b_qty_2 * ar2 / mr_b
-    ) * 100
+    for formula, name in COMPOUND_LIBRARY.items():
+        parsed = parse_formula(formula)
+        if parsed is None:
+            continue
 
-    massa_u1 = (
-        wt_b1 / 100
-    ) * target_mass
+        compound_set = set(parsed.keys())
+        shared = target_set.intersection(compound_set)
 
-    massa_u2 = (
-        wt_b2 / 100
-    ) * target_mass
+        if not shared:
+            continue
 
-    massa_a = (
-        massa_u1 /
-        (wt_a1 / 100)
-    )
+        # Jumlah target element yang tercakup
+        coverage = len(shared) / len(target_set)
 
-    u2_dari_a = (
-        wt_a2 / 100
-    ) * massa_a
+        # Penalti jika mengandung unsur di luar target
+        foreign = len(compound_set - target_set)
 
-    defisit_u2 = (
-        massa_u2 -
-        u2_dari_a
-    )
+        # Semakin banyak coverage semakin bagus
+        score = (coverage * 100 - foreign * 15)
 
-    tambahan_u2 = max(
-        defisit_u2,
-        0
-    )
+        recommendations.append({
+            "formula": formula,
+            "name": name,
+            "coverage": coverage,
+            "foreign": foreign,
+            "score": score,
+            "shared": shared
+        })
 
-    total = (
-        massa_a +
-        tambahan_u2
-    )
+    recommendations.sort(key=lambda x: x["score"], reverse=True)
+    return recommendations[:8]
 
-    return {
-        "mr_a": mr_a,
-        "mr_b": mr_b,
-        "wt_a1": wt_a1,
-        "wt_a2": wt_a2,
-        "wt_b1": wt_b1,
-        "wt_b2": wt_b2,
-        "massa_u1": massa_u1,
-        "massa_u2": massa_u2,
-        "massa_a": massa_a,
-        "u2_dari_a": u2_dari_a,
-        "defisit_u2": defisit_u2,
-        "tambahan_u2": tambahan_u2,
-        "total": total
-    }
+# =========================================================
+# SESSION STATE
+# =========================================================
 
+if "precursor_count" not in st.session_state:
+    st.session_state.precursor_count = 1
+
+if "target_count" not in st.session_state:
+    st.session_state.target_count = 2
+
+# Default precursor
+if "precursor_0_formula" not in st.session_state:
+    st.session_state.precursor_0_formula = "K2Te"
+
+if "precursor_0_coeff" not in st.session_state:
+    st.session_state.precursor_0_coeff = 1.0
+
+# Default targets
+default_targets = [("Te", 1.0), ("K", 2.0)]
+
+for i in range(10):
+    if f"target_{i}_element" not in st.session_state:
+        if i < len(default_targets):
+            st.session_state[f"target_{i}_element"] = default_targets[i][0]
+        else:
+            st.session_state[f"target_{i}_element"] = "Te"
+
+    if f"target_{i}_coeff" not in st.session_state:
+        if i < len(default_targets):
+            st.session_state[f"target_{i}_coeff"] = default_targets[i][1]
+        else:
+            st.session_state[f"target_{i}_coeff"] = 1.0
+
+# =========================================================
+# CALLBACKS
+# =========================================================
+
+def add_precursor():
+    if st.session_state.precursor_count < 6:
+        new_i = st.session_state.precursor_count
+        st.session_state[f"precursor_{new_i}_formula"] = "K2Te"
+        st.session_state[f"precursor_{new_i}_coeff"] = 1.0
+        st.session_state.precursor_count += 1
+
+def remove_precursor():
+    if st.session_state.precursor_count > 1:
+        st.session_state.precursor_count -= 1
+
+def add_target():
+    if st.session_state.target_count < 6:
+        new_i = st.session_state.target_count
+        st.session_state[f"target_{new_i}_element"] = "Te"
+        st.session_state[f"target_{new_i}_coeff"] = 1.0
+        st.session_state.target_count += 1
+
+def remove_target():
+    if st.session_state.target_count > 1:
+        st.session_state.target_count -= 1
 
 # =========================================================
 # SIDEBAR
 # =========================================================
 
-st.sidebar.markdown(
+render_sidebar(
     """
     <div style="
         font-size:20px;
@@ -805,7 +496,6 @@ st.sidebar.markdown(
     ">
         Alloy Calculator
     </div>
-
     <div style="
         font-size:11px;
         color:#AFC9E5;
@@ -813,699 +503,855 @@ st.sidebar.markdown(
     ">
         Stoichiometric Mass Balance
     </div>
-    """,
-    unsafe_allow_html=True
+    """
+, unsafe_allow_html=True)
+
+# =========================================================
+# PRECURSOR INPUT
+# =========================================================
+
+render_sidebar("**PRECURSOR A (SENYAWA)**")
+
+render_sidebar(
+    """
+    <div style="
+        font-size:11px;
+        color:#9CA3AF;
+        margin-bottom:10px;
+    ">
+        Tambahkan precursor dari library atau masukkan formula sendiri.
+    </div>
+    """
+, unsafe_allow_html=True)
+
+precursors = []
+
+for i in range(st.session_state.precursor_count):
+    render_sidebar(f"### Precursor {i + 1}")
+
+    formula = st.sidebar.text_input(
+        "Formula",
+        key=f"precursor_{i}_formula",
+        placeholder="Contoh: BaCO3"
+    ).strip()
+
+    coefficient = st.sidebar.number_input(
+        "Koefisien",
+        min_value=0.0001,
+        step=0.1,
+        format="%.4f",
+        key=f"precursor_{i}_coeff"
+    )
+
+    precursors.append({
+        "index": i,
+        "formula": formula,
+        "coefficient": coefficient
+    })
+
+pc1, pc2 = st.sidebar.columns(2)
+
+pc1.button(
+    "➕ Precursor",
+    key="add_precursor_button",
+    on_click=add_precursor,
+    use_container_width=True
 )
 
-
-# ---------------------------------------------------------
-# ELEMENTS SELECTION
-# ---------------------------------------------------------
-
-st.sidebar.markdown("**ELEMENTS**")
-
-col1, col2 = st.sidebar.columns(2)
-
-selected_elem1 = col1.selectbox(
-    "Element 1",
-    options=ELEMENT_OPTIONS,
-    index=ELEMENT_OPTIONS.index("Sm - Samarium")
+pc2.button(
+    "➖ Kurang",
+    key="remove_precursor_button",
+    on_click=remove_precursor,
+    disabled=(st.session_state.precursor_count <= 1),
+    use_container_width=True
 )
 
-unsur_1 = selected_elem1.split(" - ")[0]
-ar_1 = ELEMENTS_DATA[unsur_1]["ar"]
+render_sidebar("---")
 
-col2.number_input(
-    "Ar",
-    value=ar_1,
-    disabled=True,
-    key="ar1_display"
+# =========================================================
+# TARGET INPUT
+# =========================================================
+
+render_sidebar("**TARGET B (KOMPOSISI ALLOY)**")
+
+render_sidebar(
+    """
+    <div style="
+        font-size:11px;
+        color:#9CA3AF;
+        margin-bottom:10px;
+    ">
+        Tambahkan atau kurangi unsur target.
+    </div>
+    """
+, unsafe_allow_html=True)
+
+target_elements_dict = OrderedDict()
+
+for i in range(st.session_state.target_count):
+    col_e, col_q = st.sidebar.columns([1.1, 0.9])
+
+    element = col_e.selectbox(
+        f"Unsur {i + 1}",
+        options=list(ELEMENTS_DATA.keys()),
+        key=f"target_{i}_element"
+    )
+
+    coefficient = col_q.number_input(
+        f"Koef {i + 1}",
+        min_value=0.0001,
+        step=0.1,
+        format="%.4f",
+        key=f"target_{i}_coeff"
+    )
+
+    target_elements_dict[element] = target_elements_dict.get(element, 0) + coefficient
+
+
+tc1, tc2 = st.sidebar.columns(2)
+
+tc1.button(
+    "➕ Unsur Target",
+    key="add_target_button",
+    on_click=add_target,
+    use_container_width=True
 )
 
-
-col1, col2 = st.sidebar.columns(2)
-
-selected_elem2 = col1.selectbox(
-    "Element 2",
-    options=ELEMENT_OPTIONS,
-    index=ELEMENT_OPTIONS.index("Co - Cobalt")
+tc2.button(
+    "➖ Kurang",
+    key="remove_target_button",
+    on_click=remove_target,
+    disabled=(st.session_state.target_count <= 1),
+    use_container_width=True
 )
 
-unsur_2 = selected_elem2.split(" - ")[0]
-ar_2 = ELEMENTS_DATA[unsur_2]["ar"]
+render_sidebar("---")
 
-col2.number_input(
-    "Ar",
-    value=ar_2,
-    disabled=True,
-    key="ar2_display"
-)
+# =========================================================
+# TARGET MASS
+# =========================================================
 
-
-st.sidebar.markdown("---")
-
-
-# ---------------------------------------------------------
-# PRECURSOR
-# ---------------------------------------------------------
-
-st.sidebar.markdown("**PRECURSOR A**")
-
-col1, col2 = st.sidebar.columns(2)
-
-a_qty_1 = col1.number_input(
-    f"{unsur_1}",
-    value=1,
-    min_value=1,
-    step=1
-)
-
-a_qty_2 = col2.number_input(
-    f"{unsur_2}",
-    value=5,
-    min_value=1,
-    step=1
-)
-
-
-# ---------------------------------------------------------
-# TARGET
-# ---------------------------------------------------------
-
-st.sidebar.markdown("**TARGET B**")
-
-col1, col2 = st.sidebar.columns(2)
-
-b_qty_1 = col1.number_input(
-    f"{unsur_1}",
-    value=2,
-    min_value=1,
-    step=1
-)
-
-b_qty_2 = col2.number_input(
-    f"{unsur_2}",
-    value=17,
-    min_value=1,
-    step=1
-)
-
-
-st.sidebar.markdown("---")
-
-
-# ---------------------------------------------------------
-# MASS
-# ---------------------------------------------------------
-
-st.sidebar.markdown("**TARGET MASS**")
+render_sidebar("**TARGET MASS**")
 
 massa_target = st.sidebar.number_input(
     "Mass (g)",
-    value=1000.0,
     min_value=0.01,
-    step=10.0
+    value=1000.0,
+    step=10.0,
+    format="%.2f",
+    key="target_mass"
 )
 
-
 # =========================================================
-# VALIDATION
-# =========================================================
-
-unsur_1 = unsur_1.strip()
-unsur_2 = unsur_2.strip()
-
-
-if not unsur_1 or not unsur_2:
-    st.error("Symbols cannot be empty.")
-    st.stop()
-
-
-if unsur_1 == unsur_2:
-    st.error("Elements must be different.")
-    st.stop()
-
-
-# =========================================================
-# FORMULA
+# VALIDATE PRECURSORS
 # =========================================================
 
-mat_a = format_formula(
-    unsur_1,
-    a_qty_1,
-    unsur_2,
-    a_qty_2
-)
+valid_precursors = []
+invalid_precursors = []
 
-mat_b = format_formula(
-    unsur_1,
-    b_qty_1,
-    unsur_2,
-    b_qty_2
-)
+for p in precursors:
+    formula = p["formula"]
+    parsed = parse_formula(formula)
 
-mat_a_plain = format_formula_plain(
-    unsur_1,
-    a_qty_1,
-    unsur_2,
-    a_qty_2
-)
-
-mat_b_plain = format_formula_plain(
-    unsur_1,
-    b_qty_1,
-    unsur_2,
-    b_qty_2
-)
-
+    if parsed is None:
+        invalid_precursors.append(p)
+    else:
+        mr = calculate_mr(parsed)
+        valid_precursors.append({
+            **p,
+            "parsed": parsed,
+            "mr": mr
+        })
 
 # =========================================================
-# CALCULATION
+# TARGET DATA
 # =========================================================
 
-r = calculate_mass_balance(
-    ar_1,
-    ar_2,
-    a_qty_1,
-    a_qty_2,
-    b_qty_1,
-    b_qty_2,
-    massa_target
-)
+target_elements = list(target_elements_dict.keys())
+target_quantities = list(target_elements_dict.values())
+mr_target = calculate_mr(target_elements_dict)
 
+target_wt = {
+    element: (qty * ELEMENTS_DATA[element]["ar"] / mr_target) * 100
+    for element, qty in target_elements_dict.items()
+}
 
-# =========================================================
-# HEADER
-# =========================================================
-
-st.markdown(
-    '<div class="main-title">'
-    'ALLOY PREPARATION SIMULATION'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="subtitle">'
-    'Stoichiometric mass balance'
-    '</div>',
-    unsafe_allow_html=True
-)
-
+mass_demand = {
+    element: (wt / 100) * massa_target
+    for element, wt in target_wt.items()
+}
 
 # =========================================================
-# MATERIAL HEADER
+# MAIN TITLE
 # =========================================================
 
-col_a, col_b = st.columns(
-    [1, 1]
-)
+render_html(
+    """
+    <div class="main-title">
+        ALLOY PREPARATION SIMULATION
+    </div>
+    <div class="subtitle">
+        Stoichiometric Mass Balance with Custom Precursor & Target
+    </div>
+    """
+, unsafe_allow_html=True)
 
+# =========================================================
+# INVALID PRECURSOR WARNING
+# =========================================================
 
-with col_a:
-    st.markdown(
+if invalid_precursors:
+    names = ", ".join([p["formula"] if p["formula"] else "(kosong)" for p in invalid_precursors])
+    st.error(
+        f"Formula precursor berikut tidak valid: {names}. "
+        "Gunakan format seperti BaCO3, K2Te, Al2O3, atau Ca(OH)2."
+    )
+
+# =========================================================
+# TARGET FORMULA
+# =========================================================
+
+target_html = format_formula_html(target_elements_dict)
+target_plain = format_formula_plain(target_elements_dict)
+
+# =========================================================
+# FORMULA CARDS
+# =========================================================
+
+render_html(
+    """
+    <div class="section-title">
+        Input Summary
+    </div>
+    """
+, unsafe_allow_html=True)
+
+summary_cols = st.columns(2)
+
+with summary_cols[0]:
+    render_html(
         f"""
         <div class="card">
-
-        <div class="small-label">
-        Precursor
+            <div class="small-label">
+                Precursor
+            </div>
+            <div class="body-text">
+                {len(valid_precursors)} precursor aktif
+            </div>
         </div>
+        """
+    , unsafe_allow_html=True)
 
-        <div class="result-number">
-        {mat_a}
-        </div>
-
-        <div class="body-text">
-        Mr {r["mr_a"]:.2f} g/mol
-        </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-with col_b:
-    st.markdown(
+with summary_cols[1]:
+    render_html(
         f"""
         <div class="card-blue">
-
-        <div class="small-label">
-        Target
-        </div>
-
-        <div class="result-number">
-        {mat_b}
-        </div>
-
-        <div class="body-text">
-        Mr {r["mr_b"]:.2f} g/mol
-        </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-# =========================================================
-# KEY RESULTS
-# =========================================================
-
-st.markdown(
-    '<div class="section-title">Mass balance</div>',
-    unsafe_allow_html=True
-)
-
-
-col1, col2, col3 = st.columns(
-    [1, 1, 1]
-)
-
-
-with col1:
-    st.metric(
-        "Precursor",
-        f'{r["massa_a"]:.2f} g'
-    )
-
-
-with col2:
-    st.metric(
-        f'Pure {unsur_2}',
-        f'{r["tambahan_u2"]:.2f} g'
-    )
-
-
-with col3:
-    st.metric(
-        "Total",
-        f'{r["total"]:.2f} g'
-    )
-
-
-st.divider()
-
-
-# =========================================================
-# GOLDEN RATIO LAYOUT
-# =========================================================
-
-left, right = st.columns(
-    [1.618, 1]
-)
-
-
-# =========================================================
-# LEFT
-# =========================================================
-
-with left:
-    st.markdown(
-        '<div class="section-title">'
-        'Composition'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-    with st.container(border=True):
-        st.markdown(
-            f"""
             <div class="small-label">
-            PRECURSOR {mat_a}
+                Target Alloy
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+            <div class="result-number">
+                {target_html}
+            </div>
+            <div class="body-text">
+                Mr = {mr_target:.4f} g/mol
+            </div>
+        </div>
+        """
+    , unsafe_allow_html=True)
 
-        st.write(
-            f"Ar {unsur_1} = {ar_1:.2f} g/mol"
-        )
+# =========================================================
+# LIBRARY RECOMMENDATION
+# =========================================================
 
-        st.write(
-            f"Ar {unsur_2} = {ar_2:.2f} g/mol"
-        )
+render_html(
+    """
+    <div class="section-title">
+        Saran Precursor dari Library
+    </div>
+    """
+, unsafe_allow_html=True)
 
-        st.latex(
-            rf"""
-            M_r =
-            ({a_qty_1}\times{ar_1:.2f})
-            +
-            ({a_qty_2}\times{ar_2:.2f})
-            =
-            {r["mr_a"]:.2f}
-            """
-        )
+recommendations = recommend_compounds(target_elements)
 
-        st.write(
-            f"{unsur_1}: **{r['wt_a1']:.2f}%**"
-        )
-
-        st.write(
-            f"{unsur_2}: **{r['wt_a2']:.2f}%**"
-        )
-
-    with st.container(border=True):
-        st.markdown(
-            f"""
+if recommendations:
+    render_html(
+        """
+        <div class="card-blue">
             <div class="small-label">
-            TARGET {mat_b}
+                RECOMMENDATION ENGINE
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+            <div class="body-text">
+                Saran di bawah berasal dari library senyawa dan dipilih berdasarkan unsur target yang dapat disediakan oleh masing-masing senyawa.
+            </div>
+        </div>
+        """
+    , unsafe_allow_html=True)
 
-        st.latex(
-            rf"""
-            M_r =
-            ({b_qty_1}\times{ar_1:.2f})
-            +
-            ({b_qty_2}\times{ar_2:.2f})
-            =
-            {r["mr_b"]:.2f}
-            """
-        )
-
-        st.write(
-            f"{unsur_1}: **{r['wt_b1']:.2f}%**"
-        )
-
-        st.write(
-            f"{unsur_2}: **{r['wt_b2']:.2f}%**"
-        )
-
-    st.markdown(
-        '<div class="section-title">'
-        'Element Demand'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-    with st.container(border=True):
-        st.write(
-            f"{unsur_1}"
-        )
-
-        st.latex(
-            rf"""
-            m_{{{unsur_1}}}
-            =
-            {r["wt_b1"]:.2f}\%
-            \times
-            {massa_target:.2f}
-            =
-            {r["massa_u1"]:.2f}\ g
-            """
-        )
-
-        st.write(
-            f"{unsur_2}"
-        )
-
-        st.latex(
-            rf"""
-            m_{{{unsur_2}}}
-            =
-            {r["wt_b2"]:.2f}\%
-            \times
-            {massa_target:.2f}
-            =
-            {r["massa_u2"]:.2f}\ g
-            """
-        )
-
-    st.markdown(
-        '<div class="section-title">'
-        'Mass balance'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-    with st.container(border=True):
-        st.markdown(f"**Mass of {mat_a}**", unsafe_allow_html=True)
-        st.markdown(f"{r['massa_a']:.2f} g")
-
-    with st.container(border=True):
-        st.markdown(f"**{unsur_2} from {mat_a}**", unsafe_allow_html=True)
-        st.markdown(f"{r['u2_dari_a']:.2f} g")
-
-    with st.container(border=True):
-        st.markdown(f"**{unsur_2} Deficit**", unsafe_allow_html=True)
-        st.markdown(f"{r['defisit_u2']:.2f} g")
-
-
-# =========================================================
-# RIGHT
-# =========================================================
-
-with right:
-    st.markdown(
-        '<div class="section-title">'
-        'Visualization'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-    # -----------------------------------------------------
-    # CHART 1
-    # -----------------------------------------------------
-
-    chart_1_data = pd.DataFrame({
-        "Material": [
-            mat_a_plain,
-            f"Pure {unsur_2}"
-        ],
-        "Mass": [
-            r["massa_a"],
-            r["tambahan_u2"]
-        ]
-    })
-
-    chart_1 = (
-        alt.Chart(chart_1_data)
-        .mark_bar(
-            cornerRadiusTopLeft=4,
-            cornerRadiusTopRight=4
-        )
-        .encode(
-            x=alt.X(
-                "Material:N",
-                title=None,
-                axis=alt.Axis(
-                    labelFont="Helvetica",
-                    labelFontSize=11
-                )
-            ),
-            y=alt.Y(
-                "Mass:Q",
-                title="g",
-                axis=alt.Axis(
-                    labelFont="Helvetica",
-                    titleFont="Helvetica",
-                    labelFontSize=10,
-                    titleFontSize=10
-                )
-            ),
-            tooltip=[
-                alt.Tooltip(
-                    "Material:N",
-                    title="Material"
-                ),
-                alt.Tooltip(
-                    "Mass:Q",
-                    title="Mass",
-                    format=".2f"
-                )
-            ]
-        )
-        .properties(
-            height=260
-        )
-        .configure_view(
-            stroke=None
-        )
-    )
-
-    st.altair_chart(
-        chart_1,
-        use_container_width=True
-    )
-
-    # -----------------------------------------------------
-    # DISTRIBUTION — STACKED BAR
-    # -----------------------------------------------------
-
-    chart_2_data = pd.DataFrame({
-        "Source": [
-            mat_a_plain,
-            mat_a_plain,
-            f"Pure {unsur_2}"
-        ],
-
-        "Element": [
-            unsur_1,
-            unsur_2,
-            unsur_2
-        ],
-
-        "Mass": [
-            r["massa_u1"],
-            r["u2_dari_a"],
-            r["tambahan_u2"]
-        ]
-    })
-
-
-    chart_2 = (
-        alt.Chart(chart_2_data)
-
-        .mark_bar(
-            cornerRadiusTopLeft=3,
-            cornerRadiusTopRight=3
-        )
-
-        .encode(
-
-            x=alt.X(
-                "Source:N",
-                title=None,
-
-                sort=[
-                    mat_a_plain,
-                    f"Pure {unsur_2}"
-                ],
-
-                axis=alt.Axis(
-                    labelFont="Helvetica",
-                    labelFontSize=10,
-                    labelAngle=0
-                )
-            ),
-
-            y=alt.Y(
-                "Mass:Q",
-                title="g",
-                stack="zero",
-
-                axis=alt.Axis(
-                    labelFont="Helvetica",
-                    titleFont="Helvetica",
-                    labelFontSize=10,
-                    titleFontSize=10
-                )
-            ),
-
-            color=alt.Color(
-                "Element:N",
-                title="Element",
-
-                scale=alt.Scale(
-                    range=[
-                        "#071A33",
-                        "#0B3A6E"
-                    ]
-                ),
-
-                legend=alt.Legend(
-                    labelFont="Helvetica",
-                    labelFontSize=10,
-                    titleFont="Helvetica",
-                    titleFontSize=10
-                )
-            ),
-
-            tooltip=[
-                alt.Tooltip(
-                    "Source:N",
-                    title="Source"
-                ),
-
-                alt.Tooltip(
-                    "Element:N",
-                    title="Element"
-                ),
-
-                alt.Tooltip(
-                    "Mass:Q",
-                    title="Mass",
-                    format=".2f"
-                )
-            ]
-        )
-
-        .properties(
-            height=250
-        )
-
-        .configure_view(
-            stroke=None
-        )
-    )
-
-
-    st.altair_chart(
-        chart_2,
-        use_container_width=True
-    )
-
-    # -----------------------------------------------------
-    # SUMMARY
-    # -----------------------------------------------------
-
-    summary = pd.DataFrame({
-        "Component": [
-            mat_a_plain,
-            f"Pure {unsur_2}",
-            "Total"
-        ],
-        "Mass (g)": [
-            r["massa_a"],
-            r["tambahan_u2"],
-            r["total"]
-        ]
-    })
+    rec_df = pd.DataFrame([
+        {
+            "Senyawa": r["formula"],
+            "Nama": r["name"],
+            "Unsur Target": ", ".join(sorted(r["shared"])),
+            "Coverage": f"{r['coverage'] * 100:.0f}%"
+        }
+        for r in recommendations
+    ])
 
     st.dataframe(
-        summary.style.format({
-            "Mass (g)": "{:.2f}"
-        }),
+        rec_df,
         hide_index=True,
         use_container_width=True
     )
-
+else:
+    st.info("Belum ada senyawa library yang cocok dengan unsur target.")
 
 # =========================================================
-# FINAL RESULT
+# PRECURSOR CARDS
 # =========================================================
 
-st.markdown(
-    f"""
-    <div style="background-color: #071A33; color: white; border-radius: 9px; padding: 17px 19px; margin-top: 10px;">
-        <div style="font-size: 12px; color: #AFC9E5; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px;">
-            Preparation
-        </div>
-        <div style="font-size: 15px; color: white; line-height: 1.5;">
-            {r["massa_a"]:.2f} g {mat_a} &nbsp;+&nbsp; {r["tambahan_u2"]:.2f} g pure {unsur_2}
-        </div>
+render_html(
+    """
+    <div class="section-title">
+        Precursor yang Digunakan
     </div>
-    """,
-    unsafe_allow_html=True
+    """
+, unsafe_allow_html=True)
+
+if valid_precursors:
+    precursor_cols = st.columns(min(3, len(valid_precursors)))
+
+    for idx, p in enumerate(valid_precursors):
+        parsed = p["parsed"]
+        formula_html = format_formula_html(parsed)
+
+        with precursor_cols[idx % len(precursor_cols)]:
+            render_html(
+                f"""
+                <div class="card">
+                    <div class="small-label">
+                        PRECURSOR {p["index"] + 1}
+                    </div>
+                    <div class="result-number">
+                        {formula_html}
+                    </div>
+                    <div class="body-text">
+                        Mr = {p["mr"]:.4f} g/mol
+                    </div>
+                    <div class="body-text">
+                        Koefisien = {p["coefficient"]:.4f}
+                    </div>
+                </div>
+                """
+            , unsafe_allow_html=True)
+else:
+    st.warning("Masukkan minimal satu precursor yang valid.")
+
+# =========================================================
+# TARGET COMPOSITION
+# =========================================================
+
+render_html(
+    """
+    <div class="section-title">
+        Analisis Komposisi Target
+    </div>
+    """
+, unsafe_allow_html=True)
+
+
+comp_col1, comp_col2 = st.columns(2)
+
+with comp_col1:
+    with st.container(border=True):
+        render_html(
+            f"""
+            <div class="small-label">
+                TARGET
+            </div>
+            <div class="result-number">
+                {target_html}
+            </div>
+            <div class="body-text">
+                Mr = {mr_target:.4f} g/mol
+            </div>
+            """
+        , unsafe_allow_html=True)
+
+        render_html("<hr>", unsafe_allow_html=True)
+
+        for element, wt in target_wt.items():
+            render_html(
+                f"""
+                <div style="
+                    display:flex;
+                    justify-content:space-between;
+                    padding:6px 0;
+                ">
+                    <span style="color:#D1D5DB;">
+                        {element} ({ELEMENTS_DATA[element]["name"]})
+                    </span>
+                    <span style="
+                        color:white;
+                        font-weight:600;
+                    ">
+                        {wt:.2f} wt%
+                    </span>
+                </div>
+                """
+            , unsafe_allow_html=True)
+
+
+with comp_col2:
+    with st.container(border=True):
+        render_html(
+            """
+            <div class="small-label">
+                MASS DEMAND
+            </div>
+            """
+        , unsafe_allow_html=True)
+
+        for element, mass in mass_demand.items():
+            render_html(
+                f"""
+                <div style="
+                    display:flex;
+                    justify-content:space-between;
+                    padding:6px 0;
+                ">
+                    <span style="color:#D1D5DB;">
+                        {element}
+                    </span>
+                    <span style="
+                        color:white;
+                        font-weight:600;
+                    ">
+                        {mass:.2f} g
+                    </span>
+                </div>
+                """
+            , unsafe_allow_html=True)
+
+# =========================================================
+# MASS BALANCE
+# =========================================================
+
+render_html(
+    """
+    <div class="section-title">
+        Mass Balance
+    </div>
+    """
+, unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------
+# Calculate precursor contribution
+# ---------------------------------------------------------
+material_rows = []
+remaining_demand = dict(mass_demand)
+
+# =========================================================
+# PROCESS EACH PRECURSOR
+# =========================================================
+
+for p in valid_precursors:
+    parsed = p["parsed"]
+    mr = p["mr"]
+
+    target_shared = set(parsed.keys()).intersection(set(target_elements))
+    foreign_elements = set(parsed.keys()) - set(target_elements)
+
+    if foreign_elements:
+        material_rows.append({
+            "name": p["formula"],
+            "display": p["formula"],
+            "mass": 0.0,
+            "type": "Precursor",
+            "usable": False,
+            "reason": "Mengandung unsur di luar target"
+        })
+        continue
+
+    if not target_shared:
+        material_rows.append({
+            "name": p["formula"],
+            "display": p["formula"],
+            "mass": 0.0,
+            "type": "Precursor",
+            "usable": False,
+            "reason": "Tidak mengandung unsur target"
+        })
+        continue
+
+    possible_masses = []
+
+    for element in target_shared:
+        precursor_fraction = (parsed[element] * ELEMENTS_DATA[element]["ar"] / mr)
+        if precursor_fraction > 0:
+            possible_mass = (remaining_demand[element] / precursor_fraction)
+            possible_masses.append(possible_mass)
+
+    if possible_masses:
+        mass_used = min(possible_masses)
+    else:
+        mass_used = 0.0
+
+    mass_used *= p["coefficient"]
+
+    for element in target_shared:
+        fraction = (parsed[element] * ELEMENTS_DATA[element]["ar"] / mr)
+        supplied = (mass_used * fraction)
+        remaining_demand[element] = max(0.0, remaining_demand[element] - supplied)
+
+    material_rows.append({
+        "name": p["formula"],
+        "display": p["formula"],
+        "mass": mass_used,
+        "type": "Precursor",
+        "usable": True,
+        "reason": ""
+    })
+
+# =========================================================
+# PURE ELEMENT ADDITIONS
+# =========================================================
+
+for element, remaining in remaining_demand.items():
+    if remaining > 0.000001:
+        material_rows.append({
+            "name": f"Pure {element}",
+            "display": f"Pure {element}",
+            "mass": remaining,
+            "type": "Pure Element",
+            "usable": True,
+            "reason": ""
+        })
+
+
+# =========================================================
+# FILTER MATERIALS
+# =========================================================
+
+active_materials = [row for row in material_rows if row["mass"] > 0.000001]
+total_mass = sum(row["mass"] for row in active_materials)
+
+# =========================================================
+# MASS METRICS
+# =========================================================
+
+if active_materials:
+    metric_cols = st.columns(len(active_materials) + 1)
+    for i, row in enumerate(active_materials):
+        metric_cols[i].metric(row["name"], f'{row["mass"]:.2f} g')
+    metric_cols[-1].metric("Total Mass", f"{total_mass:.2f} g")
+else:
+    st.info("Belum ada material yang dapat digunakan.")
+
+# =========================================================
+# COMPATIBILITY WARNING
+# =========================================================
+
+unused_precursors = [row for row in material_rows if (row["type"] == "Precursor" and not row["usable"])]
+
+if unused_precursors:
+    render_html(
+        """
+        <div class="card-warning">
+            <div class="small-label">
+                CATATAN PRECURSOR
+            </div>
+            <div class="body-text">
+        """
+    , unsafe_allow_html=True)
+
+    for row in unused_precursors:
+        render_html(
+            f"""
+            • <b>{row["name"]}</b> tidak digunakan otomatis karena {row["reason"]}.<br>
+            """
+        , unsafe_allow_html=True)
+
+    render_html(
+        """
+            </div>
+        </div>
+        """
+    , unsafe_allow_html=True)
+
+
+# =========================================================
+# VISUALIZATION
+# =========================================================
+
+st.divider()
+
+left, right = st.columns([1.618, 1])
+
+# =========================================================
+# LEFT — MASS COMPOSITION
+# =========================================================
+
+with left:
+    render_html(
+        """
+        <div class="section-title">
+            Komposisi Berat Precursor
+        </div>
+        """
+    , unsafe_allow_html=True)
+
+    for p in valid_precursors:
+        parsed = p["parsed"]
+        formula_html = format_formula_html(parsed)
+
+        render_html(
+            f"""
+            <div class="card">
+                <div class="small-label">
+                    {p["formula"]}
+                </div>
+                <div class="result-number">
+                    {formula_html}
+                </div>
+                <div class="body-text">
+                    Mr = {p["mr"]:.4f} g/mol
+                </div>
+                <div class="body-text">
+                    Koefisien = {p["coefficient"]:.4f}
+                </div>
+            </div>
+            """
+        , unsafe_allow_html=True)
+
+        wt_precursor = {
+            e: (qty * ELEMENTS_DATA[e]["ar"] / p["mr"]) * 100
+            for e, qty in parsed.items()
+        }
+
+        with st.container(border=True):
+            for e, wt in wt_precursor.items():
+                render_html(
+                    f"""
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        padding:4px 0;
+                    ">
+                        <span>
+                            {e}
+                        </span>
+                        <span>
+                            <b>{wt:.2f}%</b>
+                        </span>
+                    </div>
+                    """
+                , unsafe_allow_html=True)
+
+
+# =========================================================
+# RIGHT — CHART
+# =========================================================
+
+with right:
+    render_html(
+        """
+        <div class="section-title">
+            Visualisasi Batch Penimbangan
+        </div>
+        """
+    , unsafe_allow_html=True)
+
+    chart_names = [row["name"] for row in active_materials]
+    chart_masses = [row["mass"] for row in active_materials]
+
+    if total_mass > 0:
+        chart_percent = [(mass / total_mass * 100) for mass in chart_masses]
+    else:
+        chart_percent = [0 for _ in chart_masses]
+
+
+    chart_data = pd.DataFrame({
+        "Material": chart_names,
+        "Mass": chart_masses,
+        "Batch": chart_percent
+    })
+
+    if not chart_data.empty:
+        chart = (
+            alt.Chart(chart_data)
+            .mark_bar(cornerRadiusEnd=5)
+            .encode(
+                y=alt.Y(
+                    "Material:N",
+                    title=None,
+                    sort="-x",
+                    axis=alt.Axis(
+                        labelColor="#E5E7EB",
+                        labelFontSize=11,
+                        labelLimit=160
+                    )
+                ),
+                x=alt.X(
+                    "Mass:Q",
+                    title="Mass (g)",
+                    axis=alt.Axis(
+                        labelColor="#E5E7EB",
+                        titleColor="#E5E7EB",
+                        gridColor="#1F2937"
+                    )
+                ),
+                tooltip=[
+                    alt.Tooltip("Material:N", title="Material"),
+                    alt.Tooltip("Mass:Q", title="Mass (g)", format=".2f"),
+                    alt.Tooltip("Batch:Q", title="Kontribusi (%)", format=".2f")
+                ]
+            )
+            .properties(
+                background="transparent",
+                height=max(180, len(chart_data) * 48)
+            )
+            .configure_view(stroke=None)
+        )
+
+        st.altair_chart(chart, use_container_width=True)
+
+        # -------------------------------------------------
+        # SUMMARY TABLE
+        # -------------------------------------------------
+        summary_df = pd.DataFrame({
+            "Komponen": chart_names,
+            "Massa (g)": chart_masses,
+            "Batch (%)": chart_percent
+        })
+
+        total_row = pd.DataFrame({
+            "Komponen": ["TOTAL"],
+            "Massa (g)": [total_mass],
+            "Batch (%)": [100.0]
+        })
+
+        summary_df = pd.concat([summary_df, total_row], ignore_index=True)
+
+        st.dataframe(
+            summary_df.style.format({
+                "Massa (g)": "{:.2f}",
+                "Batch (%)": "{:.2f}%"
+            }),
+            hide_index=True,
+            use_container_width=True
+        )
+
+    else:
+        st.info("Belum ada massa yang dapat divisualisasikan.")
+
+# =========================================================
+# FINAL PREPARATION FORMULA
+# =========================================================
+
+render_html(
+    """
+    <div class="section-title">
+        Formula Penimbangan Akhir
+    </div>
+    """
+, unsafe_allow_html=True)
+
+if active_materials:
+    preparation_parts = [f'{row["mass"]:.2f} g {row["name"]}' for row in active_materials]
+    preparation_text = " + ".join(preparation_parts)
+
+    render_html(
+        f"""
+        <div style="
+            background:#0F233D;
+            border:1px solid #1D3B66;
+            border-radius:9px;
+            padding:18px 20px;
+        ">
+            <div style="
+                font-size:11px;
+                color:#93C5FD;
+                text-transform:uppercase;
+                letter-spacing:0.5px;
+                margin-bottom:8px;
+            ">
+                Preparation Formula
+            </div>
+            <div style="
+                font-size:16px;
+                color:white;
+                line-height:1.6;
+                font-weight:600;
+            ">
+                {preparation_text}
+            </div>
+            <div style="
+                margin-top:10px;
+                font-size:12px;
+                color:#9CA3AF;
+            ">
+                Total batch = {total_mass:.2f} g
+            </div>
+        </div>
+        """
+    , unsafe_allow_html=True)
+else:
+    st.warning("Formula penimbangan belum dapat dibuat.")
+
+# =========================================================
+# TARGET DEMAND TABLE
+# =========================================================
+
+render_html(
+    """
+    <div class="section-title">
+        Target Demand Detail
+    </div>
+    """
+, unsafe_allow_html=True)
+
+demand_rows = []
+
+for element in target_elements:
+    demand_rows.append({
+        "Unsur": element,
+        "Koefisien": target_elements_dict[element],
+        "Ar (g/mol)": ELEMENTS_DATA[element]["ar"],
+        "wt (%)": target_wt[element],
+        "Demand (g)": mass_demand[element]
+    })
+
+demand_df = pd.DataFrame(demand_rows)
+
+st.dataframe(
+    demand_df.style.format({
+        "Koefisien": "{:.4f}",
+        "Ar (g/mol)": "{:.3f}",
+        "wt (%)": "{:.2f}%",
+        "Demand (g)": "{:.2f}"
+    }),
+    hide_index=True,
+    use_container_width=True
 )
 
 # =========================================================
-# FOOTER
+# FOOTER / THEORY
 # =========================================================
 
-st.markdown(
+render_html(
     """
     <div style="
-        text-align:center;
-        color:#98A2B3;
-        font-size:10px;
-        margin-top:18px;
+        margin-top:25px;
+        padding:15px 18px;
+        border-top:1px solid #1F2937;
+        color:#6B7280;
+        font-size:11px;
+        line-height:1.6;
     ">
-        Stoichiometric calculation · Mass balance
+        <b>Basis perhitungan:</b>
+        Hukum Kekekalan Massa dan Hukum Perbandingan Tetap.
+        Komposisi massa dihitung dari massa atom relatif (Ar) dan stoikiometri formula kimia.
     </div>
-    """,
-    unsafe_allow_html=True
-)
+    """
+, unsafe_allow_html=True)
