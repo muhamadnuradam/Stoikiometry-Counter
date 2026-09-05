@@ -2,22 +2,17 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import re
-import textwrap
+import json
+import os
+import requests
 from collections import OrderedDict
 
-# Tambahkan baris ini
+# Import dictionary dari file compounds.py
 from compounds import COMPOUND_LIBRARY
 
 # =========================================================
 # SAFE HTML RENDERER
 # =========================================================
-# ... (sisa kode tetap sama)
-
-# =========================================================
-# SAFE HTML RENDERER
-# =========================================================
-# Menghapus spasi awal di setiap baris agar HTML tidak 
-# terdeteksi sebagai code block oleh Streamlit Markdown
 def render_html(markup, **kwargs):
     cleaned_markup = "\n".join(line.strip() for line in markup.split('\n'))
     st.markdown(cleaned_markup, **kwargs)
@@ -127,7 +122,6 @@ ELEMENTS_DATA = {
     "U": {"name": "Uranium", "ar": 238.03}
 }
 
-#
 # =========================================================
 # CSS
 # =========================================================
@@ -144,8 +138,9 @@ html, body, .stApp,
     color: #F3F4F6 !important;
 }
 
+/* Header tetap ditampilkan agar tombol sidebar Streamlit tidak ikut hilang. */
 [data-testid="stHeader"] {
-    display: none !important;
+    background: transparent !important;
 }
 
 [data-testid="stSidebar"] {
@@ -155,6 +150,29 @@ html, body, .stApp,
         #0A2342 100%
     ) !important;
     border-right: 1px solid #102E50 !important;
+
+    /* Pastikan sidebar benar-benar dirender dan punya lebar. */
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-width: 21rem !important;
+    width: 21rem !important;
+}
+
+/* Jika state sidebar sebelumnya tersimpan sebagai collapsed,
+   jangan biarkan CSS Streamlit membuatnya tidak terlihat. */
+[data-testid="stSidebar"][aria-expanded="false"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-width: 21rem !important;
+    width: 21rem !important;
+    transform: none !important;
+}
+
+/* Isi sidebar tetap bisa discroll kalau kontennya panjang. */
+[data-testid="stSidebar"] > div:first-child {
+    width: 100% !important;
 }
 
 [data-testid="stSidebar"] * {
@@ -385,6 +403,152 @@ def calculate_mr(parsed):
     return sum(amount * ELEMENTS_DATA[element]["ar"] for element, amount in parsed.items())
 
 # =========================================================
+# AI COMPOUND ADVISOR
+# =========================================================
+
+def _get_openai_api_key():
+    """Read the API key from Streamlit secrets or environment variables."""
+    try:
+        key = st.secrets.get("OPENAI_API_KEY", "")
+    except Exception:
+        key = ""
+    return key or os.getenv("OPENAI_API_KEY", "")
+
+
+def ai_compound_advisor(target_elements, target_formula, max_results=8):
+    """
+    Ask an AI model for precursor/compound hints.
+
+    The AI is used only for suggestions. All formula validation and numerical
+    calculations remain deterministic in this application.
+    """
+    api_key = _get_openai_api_key()
+    if not api_key:
+        return {
+            "error": (
+                "OPENAI_API_KEY belum ditemukan. Tambahkan API key ke "
+                "Streamlit secrets atau environment variable."
+            )
+        }
+
+    element_text = ", ".join(
+        f"{el} ({ELEMENTS_DATA[el]['name']})"
+        for el in target_elements
+        if el in ELEMENTS_DATA
+    )
+
+    prompt = f"""
+You are a chemistry/materials precursor advisor inside an alloy stoichiometry
+calculator.
+
+Target composition: {target_formula}
+Target elements: {element_text}
+
+Suggest up to {max_results} plausible precursor compounds that could supply
+one or more of the target elements.
+
+Prioritize:
+1. elemental precursors,
+2. simple binary/ternary inorganic compounds,
+3. common oxides, sulfides, selenides, tellurides, halides, carbonates,
+   nitrates, or other practical inorganic precursor families when chemically
+   reasonable.
+
+Avoid inventing exotic compounds. Do not recommend compounds that contain
+target-unrelated elements unless they are a clearly useful precursor and
+explain the foreign element.
+
+Return ONLY valid JSON in this exact shape:
+{{
+  "hints": [
+    {{
+      "formula": "Bi2O3",
+      "name": "Bismuth(III) oxide",
+      "role": "Bi source",
+      "reason": "Short reason",
+      "confidence": "high"
+    }}
+  ]
+}}
+
+Do not calculate masses. Do not claim that a reaction is experimentally
+validated. These are candidate hints for the user to verify.
+"""
+
+    endpoint = "https://api.openai.com/v1/responses"
+
+    payload = {
+        "model": "gpt-5.6-luna",
+        "input": prompt,
+        "max_output_tokens": 1200,
+    }
+
+    try:
+        response = requests.post(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=45,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        # Responses API normally exposes the generated text through output.
+        output_text = data.get("output_text", "")
+        if not output_text:
+            parts = []
+            for item in data.get("output", []):
+                for content in item.get("content", []):
+                    if content.get("type") == "output_text":
+                        parts.append(content.get("text", ""))
+            output_text = "".join(parts)
+
+        if not output_text:
+            return {"error": "AI tidak mengembalikan teks hasil."}
+
+        # Handle accidental markdown code fences.
+        cleaned = output_text.strip()
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+        result = json.loads(cleaned)
+        hints = result.get("hints", [])
+
+        validated = []
+        for hint in hints:
+            formula = str(hint.get("formula", "")).strip()
+            parsed = parse_formula(formula)
+            if parsed is None:
+                continue
+
+            # Keep suggestions relevant to the target.
+            shared = set(parsed).intersection(set(target_elements))
+            if not shared:
+                continue
+
+            validated.append({
+                "formula": formula,
+                "name": str(hint.get("name", formula)),
+                "role": str(hint.get("role", "Potential precursor")),
+                "reason": str(hint.get("reason", "")),
+                "confidence": str(hint.get("confidence", "medium")),
+                "shared": ", ".join(sorted(shared)),
+            })
+
+        return {"hints": validated[:max_results]}
+
+    except requests.RequestException as exc:
+        return {"error": f"Gagal menghubungi AI: {exc}"}
+    except json.JSONDecodeError:
+        return {"error": "Respons AI bukan JSON yang valid."}
+    except Exception as exc:
+        return {"error": f"AI advisor error: {exc}"}
+
+
+# =========================================================
 # LIBRARY RECOMMENDATION
 # =========================================================
 
@@ -403,13 +567,8 @@ def recommend_compounds(target_elements):
         if not shared:
             continue
 
-        # Jumlah target element yang tercakup
         coverage = len(shared) / len(target_set)
-
-        # Penalti jika mengandung unsur di luar target
         foreign = len(compound_set - target_set)
-
-        # Semakin banyak coverage semakin bagus
         score = (coverage * 100 - foreign * 15)
 
         recommendations.append({
@@ -434,14 +593,12 @@ if "precursor_count" not in st.session_state:
 if "target_count" not in st.session_state:
     st.session_state.target_count = 2
 
-# Default precursor
 if "precursor_0_formula" not in st.session_state:
     st.session_state.precursor_0_formula = "K2Te"
 
 if "precursor_0_coeff" not in st.session_state:
     st.session_state.precursor_0_coeff = 1.0
 
-# Default targets
 default_targets = [("Te", 1.0), ("K", 2.0)]
 
 for i in range(10):
@@ -668,7 +825,6 @@ for p in precursors:
 # =========================================================
 
 target_elements = list(target_elements_dict.keys())
-target_quantities = list(target_elements_dict.values())
 mr_target = calculate_mr(target_elements_dict)
 
 target_wt = {
@@ -712,7 +868,6 @@ if invalid_precursors:
 # =========================================================
 
 target_html = format_formula_html(target_elements_dict)
-target_plain = format_formula_plain(target_elements_dict)
 
 # =========================================================
 # FORMULA CARDS
@@ -760,6 +915,152 @@ with summary_cols[1]:
     , unsafe_allow_html=True)
 
 # =========================================================
+# AI COMPOUND ADVISOR
+# =========================================================
+
+def _get_openai_api_key():
+    """Read the API key from Streamlit secrets or environment variables."""
+    try:
+        key = st.secrets.get("OPENAI_API_KEY", "")
+    except Exception:
+        key = ""
+    return key or os.getenv("OPENAI_API_KEY", "")
+
+
+def ai_compound_advisor(target_elements, target_formula, max_results=8):
+    """
+    Ask an AI model for precursor/compound hints.
+
+    The AI is used only for suggestions. All formula validation and numerical
+    calculations remain deterministic in this application.
+    """
+    api_key = _get_openai_api_key()
+    if not api_key:
+        return {
+            "error": (
+                "OPENAI_API_KEY belum ditemukan. Tambahkan API key ke "
+                "Streamlit secrets atau environment variable."
+            )
+        }
+
+    element_text = ", ".join(
+        f"{el} ({ELEMENTS_DATA[el]['name']})"
+        for el in target_elements
+        if el in ELEMENTS_DATA
+    )
+
+    prompt = f"""
+You are a chemistry/materials precursor advisor inside an alloy stoichiometry
+calculator.
+
+Target composition: {target_formula}
+Target elements: {element_text}
+
+Suggest up to {max_results} plausible precursor compounds that could supply
+one or more of the target elements.
+
+Prioritize:
+1. elemental precursors,
+2. simple binary/ternary inorganic compounds,
+3. common oxides, sulfides, selenides, tellurides, halides, carbonates,
+   nitrates, or other practical inorganic precursor families when chemically
+   reasonable.
+
+Avoid inventing exotic compounds. Do not recommend compounds that contain
+target-unrelated elements unless they are a clearly useful precursor and
+explain the foreign element.
+
+Return ONLY valid JSON in this exact shape:
+{{
+  "hints": [
+    {{
+      "formula": "Bi2O3",
+      "name": "Bismuth(III) oxide",
+      "role": "Bi source",
+      "reason": "Short reason",
+      "confidence": "high"
+    }}
+  ]
+}}
+
+Do not calculate masses. Do not claim that a reaction is experimentally
+validated. These are candidate hints for the user to verify.
+"""
+
+    endpoint = "https://api.openai.com/v1/responses"
+
+    payload = {
+        "model": "gpt-5.6-luna",
+        "input": prompt,
+        "max_output_tokens": 1200,
+    }
+
+    try:
+        response = requests.post(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=45,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        # Responses API normally exposes the generated text through output.
+        output_text = data.get("output_text", "")
+        if not output_text:
+            parts = []
+            for item in data.get("output", []):
+                for content in item.get("content", []):
+                    if content.get("type") == "output_text":
+                        parts.append(content.get("text", ""))
+            output_text = "".join(parts)
+
+        if not output_text:
+            return {"error": "AI tidak mengembalikan teks hasil."}
+
+        # Handle accidental markdown code fences.
+        cleaned = output_text.strip()
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+        result = json.loads(cleaned)
+        hints = result.get("hints", [])
+
+        validated = []
+        for hint in hints:
+            formula = str(hint.get("formula", "")).strip()
+            parsed = parse_formula(formula)
+            if parsed is None:
+                continue
+
+            # Keep suggestions relevant to the target.
+            shared = set(parsed).intersection(set(target_elements))
+            if not shared:
+                continue
+
+            validated.append({
+                "formula": formula,
+                "name": str(hint.get("name", formula)),
+                "role": str(hint.get("role", "Potential precursor")),
+                "reason": str(hint.get("reason", "")),
+                "confidence": str(hint.get("confidence", "medium")),
+                "shared": ", ".join(sorted(shared)),
+            })
+
+        return {"hints": validated[:max_results]}
+
+    except requests.RequestException as exc:
+        return {"error": f"Gagal menghubungi AI: {exc}"}
+    except json.JSONDecodeError:
+        return {"error": "Respons AI bukan JSON yang valid."}
+    except Exception as exc:
+        return {"error": f"AI advisor error: {exc}"}
+
+
+# =========================================================
 # LIBRARY RECOMMENDATION
 # =========================================================
 
@@ -804,6 +1105,93 @@ if recommendations:
     )
 else:
     st.info("Belum ada senyawa library yang cocok dengan unsur target.")
+
+# =========================================================
+# AI COMPOUND ADVISOR UI
+# =========================================================
+
+render_html(
+    """
+    <div class="section-title">
+        🤖 AI Compound Advisor
+    </div>
+    """
+    , unsafe_allow_html=True
+)
+
+render_html(
+    """
+    <div class="card-blue">
+        <div class="small-label">
+            AI HINT
+        </div>
+        <div class="body-text">
+            AI dapat menyarankan kandidat precursor berdasarkan unsur target.
+            Hasil AI adalah <b>hint</b>, bukan validasi eksperimen; perhitungan
+            massa tetap dilakukan oleh calculator.
+        </div>
+    </div>
+    """
+    , unsafe_allow_html=True
+)
+
+if st.button(
+    "🤖 Cari Hint Senyawa dengan AI",
+    key="ai_compound_button",
+    use_container_width=True,
+):
+    with st.spinner("AI sedang mencari kandidat precursor..."):
+        ai_result = ai_compound_advisor(
+            target_elements=target_elements,
+            target_formula=format_formula_plain(target_elements_dict),
+            max_results=8,
+        )
+    st.session_state["ai_compound_result"] = ai_result
+
+ai_result = st.session_state.get("ai_compound_result")
+
+if ai_result:
+    if ai_result.get("error"):
+        st.warning(ai_result["error"])
+        st.caption(
+            "Untuk mengaktifkan AI: set OPENAI_API_KEY pada Streamlit secrets "
+            "atau environment variable."
+        )
+    else:
+        hints = ai_result.get("hints", [])
+        if hints:
+            ai_df = pd.DataFrame([
+                {
+                    "Senyawa": h["formula"],
+                    "Nama": h["name"],
+                    "Peran": h["role"],
+                    "Unsur Target": h["shared"],
+                    "Confidence": h["confidence"],
+                    "Alasan": h["reason"],
+                }
+                for h in hints
+            ])
+            st.dataframe(
+                ai_df,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            for h in hints:
+                render_html(
+                    f"""
+                    <div class="card">
+                        <div class="small-label">{h["role"]}</div>
+                        <div class="result-number">{format_formula_html(parse_formula(h["formula"]))}</div>
+                        <div class="body-text">{h["name"]}</div>
+                        <div class="body-text">{h["reason"]}</div>
+                    </div>
+                    """
+                    , unsafe_allow_html=True
+                )
+        else:
+            st.info("AI tidak menemukan kandidat yang lolos validasi formula.")
+
 
 # =========================================================
 # PRECURSOR CARDS
@@ -944,10 +1332,6 @@ render_html(
     """
 , unsafe_allow_html=True)
 
-
-# ---------------------------------------------------------
-# Calculate precursor contribution
-# ---------------------------------------------------------
 material_rows = []
 remaining_demand = dict(mass_demand)
 
@@ -1028,7 +1412,6 @@ for element, remaining in remaining_demand.items():
             "reason": ""
         })
 
-
 # =========================================================
 # FILTER MATERIALS
 # =========================================================
@@ -1078,7 +1461,6 @@ if unused_precursors:
         </div>
         """
     , unsafe_allow_html=True)
-
 
 # =========================================================
 # VISUALIZATION
@@ -1148,7 +1530,6 @@ with left:
                     """
                 , unsafe_allow_html=True)
 
-
 # =========================================================
 # RIGHT — CHART
 # =========================================================
@@ -1169,7 +1550,6 @@ with right:
         chart_percent = [(mass / total_mass * 100) for mass in chart_masses]
     else:
         chart_percent = [0 for _ in chart_masses]
-
 
     chart_data = pd.DataFrame({
         "Material": chart_names,
@@ -1216,9 +1596,6 @@ with right:
 
         st.altair_chart(chart, use_container_width=True)
 
-        # -------------------------------------------------
-        # SUMMARY TABLE
-        # -------------------------------------------------
         summary_df = pd.DataFrame({
             "Komponen": chart_names,
             "Massa (g)": chart_masses,
