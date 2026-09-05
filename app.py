@@ -639,7 +639,31 @@ def add_target():
 def remove_target():
     if st.session_state.target_count > 1:
         st.session_state.target_count -= 1
+def use_library_precursor(formula):
+    """Masukkan senyawa library langsung ke input precursor."""
+    
+    # Cari slot precursor kosong terlebih dahulu
+    for i in range(st.session_state.precursor_count):
+        key = f"precursor_{i}_formula"
+        current = st.session_state.get(key, "").strip()
 
+        if not current:
+            st.session_state[key] = formula
+            st.session_state[f"precursor_{i}_coeff"] = 1.0
+            return
+
+    # Kalau semua slot terisi, tambah slot baru
+    if st.session_state.precursor_count < 6:
+        new_i = st.session_state.precursor_count
+
+        st.session_state[f"precursor_{new_i}_formula"] = formula
+        st.session_state[f"precursor_{new_i}_coeff"] = 1.0
+
+        st.session_state.precursor_count += 1
+    else:
+        st.session_state["library_precursor_message"] = (
+            "Maksimal 6 precursor sudah digunakan."
+        )
 # =========================================================
 # SIDEBAR
 # =========================================================
@@ -1089,18 +1113,39 @@ if recommendations:
     , unsafe_allow_html=True)
 
     rec_df = pd.DataFrame([
-        {
-            "Senyawa": r["formula"],
-            "Nama": r["name"],
-            "Unsur Target": ", ".join(sorted(r["shared"])),
-            "Coverage": f"{r['coverage'] * 100:.0f}%"
-        }
-        for r in recommendations
-    ])
+    {
+        "Senyawa": r["formula"],
+        "Nama": r["name"],
+        "Unsur Target": ", ".join(sorted(r["shared"])),
+        "Coverage": f"{r['coverage'] * 100:.0f}%"
+    }
+    for r in recommendations
+])
 
-    st.dataframe(
-        rec_df,
-        hide_index=True,
+# Header tabel
+header_cols = st.columns([1.2, 2.5, 1.5, 1.0, 1.0])
+
+header_cols[0].markdown("**Senyawa**")
+header_cols[1].markdown("**Nama**")
+header_cols[2].markdown("**Unsur Target**")
+header_cols[3].markdown("**Coverage**")
+header_cols[4].markdown("**Aksi**")
+
+# Isi tabel
+for idx, r in enumerate(recommendations):
+
+    cols = st.columns([1.2, 2.5, 1.5, 1.0, 1.0])
+
+    cols[0].write(r["formula"])
+    cols[1].write(r["name"])
+    cols[2].write(", ".join(sorted(r["shared"])))
+    cols[3].write(f"{r['coverage'] * 100:.0f}%")
+
+    cols[4].button(
+        "＋ Gunakan",
+        key=f"use_library_{idx}",
+        on_click=use_library_precursor,
+        args=(r["formula"],),
         use_container_width=True
     )
 else:
